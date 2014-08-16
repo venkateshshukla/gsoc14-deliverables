@@ -1,0 +1,138 @@
+From 2352f3ba76caa387ee075f10d0ce863457989459 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sun, 1 Jun 2014 01:27:25 +0530
+Subject: [PATCH 2/4] Check for libftdi, include it in Required.private
+
+Added check for libftdi during configure. This is necessary as libftdi would be
+needed for communication on android. Suitable modifications are also made to
+enable cross building for android platform.
+
+If you are building for android, you would need libftdi package. Hence, add this
+in Required.private so that it may be included automatically while cross
+compilation.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ configure.ac      | 38 +++++++++++++++++++++++++++++++++++++-
+ src/Makefile.am   | 12 ++++++++++++
+ src/serial_ftdi.c |  6 +++++-
+ 3 files changed, 54 insertions(+), 2 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 047b3f0..7f6cdbb 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -73,13 +73,49 @@ esac
+ AC_MSG_RESULT([$os_win32])
+ AM_CONDITIONAL([OS_WIN32], [test "$os_win32" = "yes"])
+ 
++# Checks for Android.
++AC_MSG_CHECKING([for Android])
++case "$host" in
++  *-linux-android*)
++    os_android=yes
++    ;;
++  *)
++    os_android=no
++    ;;
++esac
++AC_MSG_RESULT([$os_android])
++AM_CONDITIONAL([OS_ANDROID], [test "$os_android" = "yes"])
++
+ # Checks for USB support.
+ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0], [have_libusb=yes], [have_libusb=no])
+ if test "$have_libusb" = "yes"; then
+ 	AC_DEFINE([HAVE_LIBUSB], [1], [libusb support])
+-	AC_SUBST([DEPENDENCIES], [libusb-1.0])
++	dependencies="libusb-1.0"
+ fi
+ 
++# Checks for FTDI support.
++PKG_CHECK_MODULES([LIBFTDI1], [libftdi1], [have_libftdi1=yes], [have_libftdi1=no])
++if test "$have_libftdi1" = "yes"; then
++	AC_DEFINE([HAVE_LIBFTDI1], [1], [libftdi support])
++	dependencies+=" libftdi1"
++fi
++
++if test "$os_android" = yes; then
++       # Checks for FTDI support.
++       PKG_CHECK_MODULES([LIBFTDI1], [libftdi1], [have_libftdi1=yes], [have_libftdi1=no])
++       if test "$have_libftdi1" = "yes"; then
++               AC_DEFINE([HAVE_LIBFTDI1], [1], [libftdi support])
++               dependencies+=" libftdi1"
++       fi
++       # Checking for presence of ftdi_usb_open_fd function in libftdi
++       AC_SEARCH_LIBS([ftdi_usb_open_fd], [ftdi1], [have_libftdi_fd=yes], [have_libftdi_fd=no], [-lusb-1.0])
++       if test "$have_libftdi_fd" = "yes"; then
++	       AC_DEFINE([HAVE_LIBFTDI_FD], [1], [ftdi_usb_open_fd function])
++       fi
++fi
++
++AC_SUBST([DEPENDENCIES], [$dependencies])
++
+ # Checks for IrDA support.
+ AC_CHECK_HEADERS([winsock2.h af_irda.h], [irda_win32=yes], [irda_win32=no], [
+ #if HAVE_WINSOCK2_H
+diff --git a/src/Makefile.am b/src/Makefile.am
+index 595f0c7..98d517d 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -1,9 +1,16 @@
+ AM_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
+ AM_CFLAGS = $(LIBUSB_CFLAGS)
++if OS_ANDROID
++AM_CFLAGS += $(LIBFTDI1_CFLAGS)
++endif
+ 
+ lib_LTLIBRARIES = libdivecomputer.la
+ 
+ libdivecomputer_la_LIBADD = $(LIBUSB_LIBS)
++if OS_ANDROID
++libdivecomputer_la_LIBADD += $(LIBFTDI1_LIBS)
++endif
++
+ libdivecomputer_la_LDFLAGS = \
+ 	-version-info $(DC_VERSION_LIBTOOL) \
+ 	-no-undefined \
+@@ -60,8 +67,13 @@ libdivecomputer_la_SOURCES = \
+ if OS_WIN32
+ libdivecomputer_la_SOURCES += serial.h serial_win32.c
+ else
++if OS_ANDROID
++libdivecomputer_la_SOURCES += serial.h serial_ftdi.c
++else
+ libdivecomputer_la_SOURCES += serial.h serial_posix.c
+ endif
++endif
++
+ 
+ if IRDA
+ if OS_WIN32
+diff --git a/src/serial_ftdi.c b/src/serial_ftdi.c
+index 6019bfe..2295890 100644
+--- a/src/serial_ftdi.c
++++ b/src/serial_ftdi.c
+@@ -31,7 +31,7 @@
+ #include <stdio.h>
+ 
+ #include <libusb.h>
+-#include <ftdi.h>
++#include <libftdi1/ftdi.h>
+ 
+ #include "serial.h"
+ #include "context-private.h"
+@@ -81,7 +81,11 @@ open_ftdi_device (struct ftdi_context *ftdi_ctx)
+ 	int i, pid, ret;
+ 	for (i = 0; i < num_accepted_pids; i++) {
+ 		pid = accepted_pids[i];
++#ifdef HAVE_LIBFTDI_FD
++		ret = ftdi_usb_open_fd (ftdi_ctx, VID, pid, usb_fd);
++#else
+ 		ret = ftdi_usb_open (ftdi_ctx, VID, pid);
++#endif
+ 		if (ret == -3) // Device not found
+ 			continue;
+ 		else
+-- 
+1.9.3
+

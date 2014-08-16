@@ -1,0 +1,101 @@
+From 22831d3a0c947d4b08e8f18b505cd4757ee58899 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sat, 16 Aug 2014 15:17:21 +0530
+Subject: [PATCH 4/4] Implementation of serial_enumerate
+
+Proper implementation of serial_enumerate.c
+Get a list of attached ftdi devices and pass the struct libusb_device in
+callback function for every device found. For this, the definition of
+serial_callback_t has been changed. Changing const char *name to const void
+*params so that char as well as libusb_device can be passed.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ src/serial.h      |  2 +-
+ src/serial_ftdi.c | 42 +++++++++++++++++++++++++++++++++---------
+ 2 files changed, 34 insertions(+), 10 deletions(-)
+
+diff --git a/src/serial.h b/src/serial.h
+index 636265d..ca7defc 100644
+--- a/src/serial.h
++++ b/src/serial.h
+@@ -55,7 +55,7 @@ typedef enum serial_line_t {
+ 	SERIAL_LINE_RNG, // Ring indicator
+ } serial_line_t;
+ 
+-typedef void (*serial_callback_t) (const char *name, void *userdata);
++typedef void (*serial_callback_t) (const void *param, void *userdata);
+ 
+ int serial_enumerate (serial_callback_t callback, void *userdata);
+ 
+diff --git a/src/serial_ftdi.c b/src/serial_ftdi.c
+index cf12779..7f2146e 100644
+--- a/src/serial_ftdi.c
++++ b/src/serial_ftdi.c
+@@ -45,6 +45,13 @@
+ 
+ #define MAX_BACKOFF 500 // Max milliseconds to wait before timing out.
+ 
++static int accepted_pids[] = {
++	0xF460, // Oceanic
++	0xF680, // Suunto
++	0x87D0, // Cressi (Leonardo)
++	0x6001, 0x6010, 0x6011, // Suunto (Smart Interface), Heinrichs Weikamp
++};
++
+ struct serial_t {
+         /* Library ftdi_ctx. */
+         dc_context_t *context;
+@@ -72,12 +79,7 @@ struct serial_t {
+ int
+ open_ftdi_device_fd (struct ftdi_context *ftdi_ctx, int usb_fd)
+ {
+-	int accepted_pids[] = { 0x6001, 0x6010, 0x6011, // Suunto (Smart Interface), Heinrichs Weikamp
+-		0xF460, // Oceanic
+-		0xF680, // Suunto
+-		0x87D0, // Cressi (Leonardo)
+-	};
+-	int num_accepted_pids = 6;
++	int num_accepted_pids = sizeof (accepted_pids) / sizeof (accepted_pids[0]);
+ 	int i, pid, ret;
+ 	for (i = 0; i < num_accepted_pids; i++) {
+ 		pid = accepted_pids[i];
+@@ -98,10 +100,32 @@ open_ftdi_device_fd (struct ftdi_context *ftdi_ctx, int usb_fd)
+ int
+ serial_enumerate (serial_callback_t callback, void *userdata)
+ {
+-	// Unimplemented.
+-        return -1;
+-}
++	// Use ftdi_usb_find_all to get a linked list of all ftdi devices and
++	// call the callback function for it sending libusb_device instead of
++	// const char *name
++	struct ftdi_context *ftdi_ctx = ftdi_new();
++	if (ftdi_ctx == NULL) {
++		return -1; // ENOMEM (Not enough space)
++	}
+ 
++	ftdi_init(ftdi_ctx);
++
++	int num = sizeof (accepted_pids) / sizeof (accepted_pids[0]);
++	int i;
++	for (i = 0; i < num; i++) {
++		struct libusb_device *dev;
++		struct ftdi_device_list *devlist = NULL;
++		int j = ftdi_usb_find_all( ftdi_ctx, &devlist, VID, accepted_pids[i]);
++		while (devlist != NULL) {
++			dev = devlist->dev;
++			callback (dev, userdata);
++			devlist = devlist->next;
++		}
++		ftdi_list_free(&devlist);
++	}
++	ftdi_free(ftdi_ctx);
++        return 0;
++}
+ 
+ //
+ // Open the serial port.
+-- 
+1.9.3
+

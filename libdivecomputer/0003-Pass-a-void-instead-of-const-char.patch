@@ -1,0 +1,1323 @@
+From 371fc0dde80268323be7938e081d4abdbcb49f10 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sat, 16 Aug 2014 09:13:13 +0530
+Subject: [PATCH 3/4] Pass a void * instead of const char *
+
+Name is not suitable for every platform. Hence, instead of passing const char
+*name, it is better to pass a void * which can be used to pass anything to the
+serial_open function. For serial_posix, name is required, for serial_ftdi, int
+usb_fd is required. Incorporate these as well.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ .gitignore                                    |  2 +
+ examples/hw_ostc_fwupdate.c                   |  2 +-
+ examples/universal.c                          |  2 +-
+ include/libdivecomputer/cressi_edy.h          |  2 +-
+ include/libdivecomputer/cressi_leonardo.h     |  2 +-
+ include/libdivecomputer/device.h              |  2 +-
+ include/libdivecomputer/diverite_nitekq.h     |  2 +-
+ include/libdivecomputer/hw_frog.h             |  2 +-
+ include/libdivecomputer/hw_ostc.h             |  2 +-
+ include/libdivecomputer/hw_ostc3.h            |  2 +-
+ include/libdivecomputer/mares_darwin.h        |  2 +-
+ include/libdivecomputer/mares_iconhd.h        |  2 +-
+ include/libdivecomputer/mares_nemo.h          |  2 +-
+ include/libdivecomputer/mares_puck.h          |  2 +-
+ include/libdivecomputer/oceanic_atom2.h       |  2 +-
+ include/libdivecomputer/oceanic_veo250.h      |  2 +-
+ include/libdivecomputer/oceanic_vtpro.h       |  2 +-
+ include/libdivecomputer/reefnet_sensus.h      |  2 +-
+ include/libdivecomputer/reefnet_sensuspro.h   |  2 +-
+ include/libdivecomputer/reefnet_sensusultra.h |  2 +-
+ include/libdivecomputer/shearwater_petrel.h   |  2 +-
+ include/libdivecomputer/shearwater_predator.h |  2 +-
+ include/libdivecomputer/suunto_d9.h           |  2 +-
+ include/libdivecomputer/suunto_eon.h          |  2 +-
+ include/libdivecomputer/suunto_solution.h     |  2 +-
+ include/libdivecomputer/suunto_vyper.h        |  2 +-
+ include/libdivecomputer/suunto_vyper2.h       |  2 +-
+ include/libdivecomputer/uwatec_aladin.h       |  2 +-
+ include/libdivecomputer/uwatec_memomouse.h    |  2 +-
+ include/libdivecomputer/uwatec_meridian.h     |  2 +-
+ include/libdivecomputer/zeagle_n2ition3.h     |  2 +-
+ src/cressi_edy.c                              |  4 +-
+ src/cressi_leonardo.c                         |  4 +-
+ src/device.c                                  | 56 +++++++++++++--------------
+ src/diverite_nitekq.c                         |  4 +-
+ src/hw_frog.c                                 |  4 +-
+ src/hw_ostc.c                                 |  4 +-
+ src/hw_ostc3.c                                |  4 +-
+ src/mares_darwin.c                            |  4 +-
+ src/mares_iconhd.c                            |  4 +-
+ src/mares_nemo.c                              |  4 +-
+ src/mares_puck.c                              |  4 +-
+ src/oceanic_atom2.c                           |  4 +-
+ src/oceanic_veo250.c                          |  4 +-
+ src/oceanic_vtpro.c                           |  4 +-
+ src/reefnet_sensus.c                          |  4 +-
+ src/reefnet_sensuspro.c                       |  4 +-
+ src/reefnet_sensusultra.c                     |  4 +-
+ src/serial.h                                  |  2 +-
+ src/serial_ftdi.c                             | 11 +++---
+ src/serial_posix.c                            |  3 +-
+ src/serial_win32.c                            |  3 +-
+ src/shearwater_common.c                       |  4 +-
+ src/shearwater_common.h                       |  2 +-
+ src/shearwater_petrel.c                       |  4 +-
+ src/shearwater_predator.c                     |  4 +-
+ src/suunto_d9.c                               |  4 +-
+ src/suunto_eon.c                              |  4 +-
+ src/suunto_solution.c                         |  4 +-
+ src/suunto_vyper.c                            |  4 +-
+ src/suunto_vyper2.c                           |  4 +-
+ src/uwatec_aladin.c                           |  4 +-
+ src/uwatec_memomouse.c                        |  4 +-
+ src/uwatec_meridian.c                         |  4 +-
+ src/zeagle_n2ition3.c                         |  4 +-
+ 65 files changed, 128 insertions(+), 123 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index ec2a37b..a325c56 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -32,6 +32,8 @@ Makefile.in
+ /stamp-h1
+ /tags
+ 
++/build
++
+ /examples/aladin
+ /examples/atom2
+ /examples/d9
+diff --git a/examples/hw_ostc_fwupdate.c b/examples/hw_ostc_fwupdate.c
+index a9e7fde..48e59b9 100644
+--- a/examples/hw_ostc_fwupdate.c
++++ b/examples/hw_ostc_fwupdate.c
+@@ -54,7 +54,7 @@ fwupdate (const char *name, const char *hexfile)
+ 	dc_context_set_logfunc (context, logfunc, NULL);
+ 
+ 	message ("hw_ostc_device_open\n");
+-	dc_status_t rc = hw_ostc_device_open (&device, context, name);
++	dc_status_t rc = hw_ostc_device_open (&device, context, (void *) name);
+ 	if (rc != DC_STATUS_SUCCESS) {
+ 		WARNING ("Error opening serial port.");
+ 		dc_context_free (context);
+diff --git a/examples/universal.c b/examples/universal.c
+index 1e0307b..f3dcb88 100644
+--- a/examples/universal.c
++++ b/examples/universal.c
+@@ -666,7 +666,7 @@ dowork (dc_context_t *context, dc_descriptor_t *descriptor, const char *devname,
+ 		dc_descriptor_get_product (descriptor),
+ 		devname ? devname : "null");
+ 	dc_device_t *device = NULL;
+-	rc = dc_device_open (&device, context, descriptor, devname);
++	rc = dc_device_open (&device, context, descriptor, (void *) devname);
+ 	if (rc != DC_STATUS_SUCCESS) {
+ 		WARNING ("Error opening device.");
+ 		return rc;
+diff --git a/include/libdivecomputer/cressi_edy.h b/include/libdivecomputer/cressi_edy.h
+index 852aa05..7532e5d 100644
+--- a/include/libdivecomputer/cressi_edy.h
++++ b/include/libdivecomputer/cressi_edy.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-cressi_edy_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++cressi_edy_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ cressi_edy_parser_create (dc_parser_t **parser, dc_context_t *context, unsigned int model);
+diff --git a/include/libdivecomputer/cressi_leonardo.h b/include/libdivecomputer/cressi_leonardo.h
+index bddc9d1..27b5cc2 100644
+--- a/include/libdivecomputer/cressi_leonardo.h
++++ b/include/libdivecomputer/cressi_leonardo.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-cressi_leonardo_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++cressi_leonardo_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ cressi_leonardo_extract_dives (dc_device_t *abstract, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/device.h b/include/libdivecomputer/device.h
+index 7ba4bd6..969f749 100644
+--- a/include/libdivecomputer/device.h
++++ b/include/libdivecomputer/device.h
+@@ -70,7 +70,7 @@ typedef void (*dc_event_callback_t) (dc_device_t *device, dc_event_type_t event,
+ typedef int (*dc_dive_callback_t) (const unsigned char *data, unsigned int size, const unsigned char *fingerprint, unsigned int fsize, void *userdata);
+ 
+ dc_status_t
+-dc_device_open (dc_device_t **out, dc_context_t *context, dc_descriptor_t *descriptor, const char *name);
++dc_device_open (dc_device_t **out, dc_context_t *context, dc_descriptor_t *descriptor, const void *params);
+ 
+ dc_family_t
+ dc_device_get_type (dc_device_t *device);
+diff --git a/include/libdivecomputer/diverite_nitekq.h b/include/libdivecomputer/diverite_nitekq.h
+index d7dd5e8..7978afa 100644
+--- a/include/libdivecomputer/diverite_nitekq.h
++++ b/include/libdivecomputer/diverite_nitekq.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-diverite_nitekq_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++diverite_nitekq_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ diverite_nitekq_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/hw_frog.h b/include/libdivecomputer/hw_frog.h
+index a831ba4..1620d75 100644
+--- a/include/libdivecomputer/hw_frog.h
++++ b/include/libdivecomputer/hw_frog.h
+@@ -35,7 +35,7 @@ extern "C" {
+ #define HW_FROG_CUSTOMTEXT_SIZE 13
+ 
+ dc_status_t
+-hw_frog_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++hw_frog_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ hw_frog_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/hw_ostc.h b/include/libdivecomputer/hw_ostc.h
+index 4dfb523..fb26be0 100644
+--- a/include/libdivecomputer/hw_ostc.h
++++ b/include/libdivecomputer/hw_ostc.h
+@@ -41,7 +41,7 @@ typedef enum hw_ostc_format_t {
+ } hw_ostc_format_t;
+ 
+ dc_status_t
+-hw_ostc_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++hw_ostc_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ hw_ostc_device_md2hash (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/hw_ostc3.h b/include/libdivecomputer/hw_ostc3.h
+index 267b7e3..d6ee9c3 100644
+--- a/include/libdivecomputer/hw_ostc3.h
++++ b/include/libdivecomputer/hw_ostc3.h
+@@ -35,7 +35,7 @@ extern "C" {
+ #define HW_OSTC3_CUSTOMTEXT_SIZE 60
+ 
+ dc_status_t
+-hw_ostc3_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++hw_ostc3_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ hw_ostc3_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/mares_darwin.h b/include/libdivecomputer/mares_darwin.h
+index 9d4da9a..4e78af8 100644
+--- a/include/libdivecomputer/mares_darwin.h
++++ b/include/libdivecomputer/mares_darwin.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-mares_darwin_device_open (dc_device_t **device, dc_context_t *context, const char *name, unsigned int model);
++mares_darwin_device_open (dc_device_t **device, dc_context_t *context, const void *params, unsigned int model);
+ 
+ dc_status_t
+ mares_darwin_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/mares_iconhd.h b/include/libdivecomputer/mares_iconhd.h
+index 38f82b3..604bb4e 100644
+--- a/include/libdivecomputer/mares_iconhd.h
++++ b/include/libdivecomputer/mares_iconhd.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-mares_iconhd_device_open (dc_device_t **device, dc_context_t *context, const char *name, unsigned int model);
++mares_iconhd_device_open (dc_device_t **device, dc_context_t *context, const void *params, unsigned int model);
+ 
+ dc_status_t
+ mares_iconhd_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/mares_nemo.h b/include/libdivecomputer/mares_nemo.h
+index 4ced926..0660647 100644
+--- a/include/libdivecomputer/mares_nemo.h
++++ b/include/libdivecomputer/mares_nemo.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-mares_nemo_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++mares_nemo_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ mares_nemo_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/mares_puck.h b/include/libdivecomputer/mares_puck.h
+index 6706474..7788652 100644
+--- a/include/libdivecomputer/mares_puck.h
++++ b/include/libdivecomputer/mares_puck.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-mares_puck_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++mares_puck_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ mares_puck_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/oceanic_atom2.h b/include/libdivecomputer/oceanic_atom2.h
+index 4c52420..43a2a73 100644
+--- a/include/libdivecomputer/oceanic_atom2.h
++++ b/include/libdivecomputer/oceanic_atom2.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-oceanic_atom2_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++oceanic_atom2_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ oceanic_atom2_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/oceanic_veo250.h b/include/libdivecomputer/oceanic_veo250.h
+index aaeee46..1b02b90 100644
+--- a/include/libdivecomputer/oceanic_veo250.h
++++ b/include/libdivecomputer/oceanic_veo250.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-oceanic_veo250_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++oceanic_veo250_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ oceanic_veo250_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/oceanic_vtpro.h b/include/libdivecomputer/oceanic_vtpro.h
+index ba693f6..439a930 100644
+--- a/include/libdivecomputer/oceanic_vtpro.h
++++ b/include/libdivecomputer/oceanic_vtpro.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-oceanic_vtpro_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++oceanic_vtpro_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ oceanic_vtpro_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/reefnet_sensus.h b/include/libdivecomputer/reefnet_sensus.h
+index 96ff5ba..87d0698 100644
+--- a/include/libdivecomputer/reefnet_sensus.h
++++ b/include/libdivecomputer/reefnet_sensus.h
+@@ -33,7 +33,7 @@ extern "C" {
+ #define REEFNET_SENSUS_HANDSHAKE_SIZE 10
+ 
+ dc_status_t
+-reefnet_sensus_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++reefnet_sensus_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ reefnet_sensus_device_get_handshake (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/reefnet_sensuspro.h b/include/libdivecomputer/reefnet_sensuspro.h
+index e092fef..d497450 100644
+--- a/include/libdivecomputer/reefnet_sensuspro.h
++++ b/include/libdivecomputer/reefnet_sensuspro.h
+@@ -33,7 +33,7 @@ extern "C" {
+ #define REEFNET_SENSUSPRO_HANDSHAKE_SIZE 10
+ 
+ dc_status_t
+-reefnet_sensuspro_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++reefnet_sensuspro_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ reefnet_sensuspro_device_get_handshake (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/reefnet_sensusultra.h b/include/libdivecomputer/reefnet_sensusultra.h
+index 4cff902..8f83ec8 100644
+--- a/include/libdivecomputer/reefnet_sensusultra.h
++++ b/include/libdivecomputer/reefnet_sensusultra.h
+@@ -42,7 +42,7 @@ typedef enum reefnet_sensusultra_parameter_t {
+ } reefnet_sensusultra_parameter_t;
+ 
+ dc_status_t
+-reefnet_sensusultra_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++reefnet_sensusultra_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ reefnet_sensusultra_device_set_maxretries (dc_device_t *device, unsigned int maxretries);
+diff --git a/include/libdivecomputer/shearwater_petrel.h b/include/libdivecomputer/shearwater_petrel.h
+index 5092127..61153eb 100644
+--- a/include/libdivecomputer/shearwater_petrel.h
++++ b/include/libdivecomputer/shearwater_petrel.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-shearwater_petrel_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++shearwater_petrel_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ shearwater_petrel_parser_create (dc_parser_t **parser, dc_context_t *context);
+diff --git a/include/libdivecomputer/shearwater_predator.h b/include/libdivecomputer/shearwater_predator.h
+index 40c7ae2..79899ab 100644
+--- a/include/libdivecomputer/shearwater_predator.h
++++ b/include/libdivecomputer/shearwater_predator.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-shearwater_predator_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++shearwater_predator_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ shearwater_predator_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/suunto_d9.h b/include/libdivecomputer/suunto_d9.h
+index d177c6c..f73cbe6 100644
+--- a/include/libdivecomputer/suunto_d9.h
++++ b/include/libdivecomputer/suunto_d9.h
+@@ -33,7 +33,7 @@ extern "C" {
+ #define SUUNTO_D9_VERSION_SIZE 0x04
+ 
+ dc_status_t
+-suunto_d9_device_open (dc_device_t **device, dc_context_t *context, const char *name, unsigned int model);
++suunto_d9_device_open (dc_device_t **device, dc_context_t *context, const void *params, unsigned int model);
+ 
+ dc_status_t
+ suunto_d9_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/suunto_eon.h b/include/libdivecomputer/suunto_eon.h
+index 3ee1277..6d60e7c 100644
+--- a/include/libdivecomputer/suunto_eon.h
++++ b/include/libdivecomputer/suunto_eon.h
+@@ -33,7 +33,7 @@ extern "C" {
+ #define SUUNTO_EON_NAME_SIZE 20
+ 
+ dc_status_t
+-suunto_eon_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++suunto_eon_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ suunto_eon_device_write_name (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/suunto_solution.h b/include/libdivecomputer/suunto_solution.h
+index 619eb88..1a55d9d 100644
+--- a/include/libdivecomputer/suunto_solution.h
++++ b/include/libdivecomputer/suunto_solution.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-suunto_solution_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++suunto_solution_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ suunto_solution_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/suunto_vyper.h b/include/libdivecomputer/suunto_vyper.h
+index a730b95..cc44043 100644
+--- a/include/libdivecomputer/suunto_vyper.h
++++ b/include/libdivecomputer/suunto_vyper.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-suunto_vyper_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++suunto_vyper_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ suunto_vyper_device_read_dive (dc_device_t *device, dc_buffer_t *buffer, int init);
+diff --git a/include/libdivecomputer/suunto_vyper2.h b/include/libdivecomputer/suunto_vyper2.h
+index 8619b3d..7b5655a 100644
+--- a/include/libdivecomputer/suunto_vyper2.h
++++ b/include/libdivecomputer/suunto_vyper2.h
+@@ -32,7 +32,7 @@ extern "C" {
+ #define SUUNTO_VYPER2_VERSION_SIZE 0x04
+ 
+ dc_status_t
+-suunto_vyper2_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++suunto_vyper2_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ suunto_vyper2_device_version (dc_device_t *device, unsigned char data[], unsigned int size);
+diff --git a/include/libdivecomputer/uwatec_aladin.h b/include/libdivecomputer/uwatec_aladin.h
+index 73226a9..0857d1a 100644
+--- a/include/libdivecomputer/uwatec_aladin.h
++++ b/include/libdivecomputer/uwatec_aladin.h
+@@ -30,7 +30,7 @@ extern "C" {
+ #include "device.h"
+ 
+ dc_status_t
+-uwatec_aladin_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++uwatec_aladin_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ uwatec_aladin_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/uwatec_memomouse.h b/include/libdivecomputer/uwatec_memomouse.h
+index 7eb5dc0..ca6d255 100644
+--- a/include/libdivecomputer/uwatec_memomouse.h
++++ b/include/libdivecomputer/uwatec_memomouse.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-uwatec_memomouse_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++uwatec_memomouse_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ uwatec_memomouse_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/uwatec_meridian.h b/include/libdivecomputer/uwatec_meridian.h
+index 723a9de..9149c0e 100644
+--- a/include/libdivecomputer/uwatec_meridian.h
++++ b/include/libdivecomputer/uwatec_meridian.h
+@@ -31,7 +31,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-uwatec_meridian_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++uwatec_meridian_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ uwatec_meridian_extract_dives (dc_device_t *device, const unsigned char data[], unsigned int size, dc_dive_callback_t callback, void *userdata);
+diff --git a/include/libdivecomputer/zeagle_n2ition3.h b/include/libdivecomputer/zeagle_n2ition3.h
+index a9509cd..706cadb 100644
+--- a/include/libdivecomputer/zeagle_n2ition3.h
++++ b/include/libdivecomputer/zeagle_n2ition3.h
+@@ -30,7 +30,7 @@ extern "C" {
+ #endif /* __cplusplus */
+ 
+ dc_status_t
+-zeagle_n2ition3_device_open (dc_device_t **device, dc_context_t *context, const char *name);
++zeagle_n2ition3_device_open (dc_device_t **device, dc_context_t *context, const void *params);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/cressi_edy.c b/src/cressi_edy.c
+index d5c5482..2243a38 100644
+--- a/src/cressi_edy.c
++++ b/src/cressi_edy.c
+@@ -170,7 +170,7 @@ cressi_edy_quit (cressi_edy_device_t *device)
+ 
+ 
+ dc_status_t
+-cressi_edy_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++cressi_edy_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -190,7 +190,7 @@ cressi_edy_device_open (dc_device_t **out, dc_context_t *context, const char *na
+ 	device->model = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/cressi_leonardo.c b/src/cressi_leonardo.c
+index 87a6412..9ca4837 100644
+--- a/src/cressi_leonardo.c
++++ b/src/cressi_leonardo.c
+@@ -72,7 +72,7 @@ static const dc_device_vtable_t cressi_leonardo_device_vtable = {
+ };
+ 
+ dc_status_t
+-cressi_leonardo_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++cressi_leonardo_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -91,7 +91,7 @@ cressi_leonardo_device_open (dc_device_t **out, dc_context_t *context, const cha
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/device.c b/src/device.c
+index 9fad7a2..0c38813 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -58,7 +58,7 @@ device_init (dc_device_t *device, dc_context_t *context, const dc_device_vtable_
+ }
+ 
+ dc_status_t
+-dc_device_open (dc_device_t **out, dc_context_t *context, dc_descriptor_t *descriptor, const char *name)
++dc_device_open (dc_device_t **out, dc_context_t *context, dc_descriptor_t *descriptor, const void *params)
+ {
+ 	dc_status_t rc = DC_STATUS_SUCCESS;
+ 	dc_device_t *device = NULL;
+@@ -68,91 +68,91 @@ dc_device_open (dc_device_t **out, dc_context_t *context, dc_descriptor_t *descr
+ 
+ 	switch (dc_descriptor_get_type (descriptor)) {
+ 	case DC_FAMILY_SUUNTO_SOLUTION:
+-		rc = suunto_solution_device_open (&device, context, name);
++		rc = suunto_solution_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_SUUNTO_EON:
+-		rc = suunto_eon_device_open (&device, context, name);
++		rc = suunto_eon_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_SUUNTO_VYPER:
+-		rc = suunto_vyper_device_open (&device, context, name);
++		rc = suunto_vyper_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_SUUNTO_VYPER2:
+-		rc = suunto_vyper2_device_open (&device, context, name);
++		rc = suunto_vyper2_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_SUUNTO_D9:
+-		rc = suunto_d9_device_open (&device, context, name, dc_descriptor_get_model (descriptor));
++		rc = suunto_d9_device_open (&device, context, params, dc_descriptor_get_model (descriptor));
+ 		break;
+ 	case DC_FAMILY_UWATEC_ALADIN:
+-		rc = uwatec_aladin_device_open (&device, context, name);
++		rc = uwatec_aladin_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_UWATEC_MEMOMOUSE:
+-		rc = uwatec_memomouse_device_open (&device, context, name);
++		rc = uwatec_memomouse_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_UWATEC_SMART:
+ 		rc = uwatec_smart_device_open (&device, context);
+ 		break;
+ 	case DC_FAMILY_UWATEC_MERIDIAN:
+-		rc = uwatec_meridian_device_open (&device, context, name);
++		rc = uwatec_meridian_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_REEFNET_SENSUS:
+-		rc = reefnet_sensus_device_open (&device, context, name);
++		rc = reefnet_sensus_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_REEFNET_SENSUSPRO:
+-		rc = reefnet_sensuspro_device_open (&device, context, name);
++		rc = reefnet_sensuspro_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_REEFNET_SENSUSULTRA:
+-		rc = reefnet_sensusultra_device_open (&device, context, name);
++		rc = reefnet_sensusultra_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_OCEANIC_VTPRO:
+-		rc = oceanic_vtpro_device_open (&device, context, name);
++		rc = oceanic_vtpro_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_OCEANIC_VEO250:
+-		rc = oceanic_veo250_device_open (&device, context, name);
++		rc = oceanic_veo250_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_OCEANIC_ATOM2:
+-		rc = oceanic_atom2_device_open (&device, context, name);
++		rc = oceanic_atom2_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_MARES_NEMO:
+-		rc = mares_nemo_device_open (&device, context, name);
++		rc = mares_nemo_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_MARES_PUCK:
+-		rc = mares_puck_device_open (&device, context, name);
++		rc = mares_puck_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_MARES_DARWIN:
+-		rc = mares_darwin_device_open (&device, context, name, dc_descriptor_get_model (descriptor));
++		rc = mares_darwin_device_open (&device, context, params, dc_descriptor_get_model (descriptor));
+ 		break;
+ 	case DC_FAMILY_MARES_ICONHD:
+-		rc = mares_iconhd_device_open (&device, context, name, dc_descriptor_get_model (descriptor));
++		rc = mares_iconhd_device_open (&device, context, params, dc_descriptor_get_model (descriptor));
+ 		break;
+ 	case DC_FAMILY_HW_OSTC:
+-		rc = hw_ostc_device_open (&device, context, name);
++		rc = hw_ostc_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_HW_FROG:
+-		rc = hw_frog_device_open (&device, context, name);
++		rc = hw_frog_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_HW_OSTC3:
+-		rc = hw_ostc3_device_open (&device, context, name);
++		rc = hw_ostc3_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_CRESSI_EDY:
+-		rc = cressi_edy_device_open (&device, context, name);
++		rc = cressi_edy_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_CRESSI_LEONARDO:
+-		rc = cressi_leonardo_device_open (&device, context, name);
++		rc = cressi_leonardo_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_ZEAGLE_N2ITION3:
+-		rc = zeagle_n2ition3_device_open (&device, context, name);
++		rc = zeagle_n2ition3_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_ATOMICS_COBALT:
+ 		rc = atomics_cobalt_device_open (&device, context);
+ 		break;
+ 	case DC_FAMILY_SHEARWATER_PREDATOR:
+-		rc = shearwater_predator_device_open (&device, context, name);
++		rc = shearwater_predator_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_SHEARWATER_PETREL:
+-		rc = shearwater_petrel_device_open (&device, context, name);
++		rc = shearwater_petrel_device_open (&device, context, params);
+ 		break;
+ 	case DC_FAMILY_DIVERITE_NITEKQ:
+-		rc = diverite_nitekq_device_open (&device, context, name);
++		rc = diverite_nitekq_device_open (&device, context, params);
+ 		break;
+ 	default:
+ 		return DC_STATUS_INVALIDARGS;
+diff --git a/src/diverite_nitekq.c b/src/diverite_nitekq.c
+index 30692c6..8a29c59 100644
+--- a/src/diverite_nitekq.c
++++ b/src/diverite_nitekq.c
+@@ -147,7 +147,7 @@ diverite_nitekq_handshake (diverite_nitekq_device_t *device)
+ 
+ 
+ dc_status_t
+-diverite_nitekq_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++diverite_nitekq_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -166,7 +166,7 @@ diverite_nitekq_device_open (dc_device_t **out, dc_context_t *context, const cha
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/hw_frog.c b/src/hw_frog.c
+index ec760ac..7578a1d 100644
+--- a/src/hw_frog.c
++++ b/src/hw_frog.c
+@@ -200,7 +200,7 @@ hw_frog_transfer (hw_frog_device_t *device,
+ 
+ 
+ dc_status_t
+-hw_frog_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++hw_frog_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -220,7 +220,7 @@ hw_frog_device_open (dc_device_t **out, dc_context_t *context, const char *name)
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/hw_ostc.c b/src/hw_ostc.c
+index d994d38..08ee585 100644
+--- a/src/hw_ostc.c
++++ b/src/hw_ostc.c
+@@ -123,7 +123,7 @@ hw_ostc_send (hw_ostc_device_t *device, unsigned char cmd, unsigned int echo)
+ 
+ 
+ dc_status_t
+-hw_ostc_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++hw_ostc_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -143,7 +143,7 @@ hw_ostc_device_open (dc_device_t **out, dc_context_t *context, const char *name)
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/hw_ostc3.c b/src/hw_ostc3.c
+index 8373f96..3d3ee9a 100644
+--- a/src/hw_ostc3.c
++++ b/src/hw_ostc3.c
+@@ -199,7 +199,7 @@ hw_ostc3_transfer (hw_ostc3_device_t *device,
+ 
+ 
+ dc_status_t
+-hw_ostc3_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++hw_ostc3_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -219,7 +219,7 @@ hw_ostc3_device_open (dc_device_t **out, dc_context_t *context, const char *name
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/mares_darwin.c b/src/mares_darwin.c
+index 5c2513b..0310319 100644
+--- a/src/mares_darwin.c
++++ b/src/mares_darwin.c
+@@ -94,7 +94,7 @@ static const mares_darwin_layout_t mares_darwinair_layout = {
+ 
+ 
+ dc_status_t
+-mares_darwin_device_open (dc_device_t **out, dc_context_t *context, const char *name, unsigned int model)
++mares_darwin_device_open (dc_device_t **out, dc_context_t *context, const void *params, unsigned int model)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -118,7 +118,7 @@ mares_darwin_device_open (dc_device_t **out, dc_context_t *context, const char *
+ 		device->layout = &mares_darwin_layout;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->base.port, context, name);
++	int rc = serial_open (&device->base.port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/mares_iconhd.c b/src/mares_iconhd.c
+index accefcf..02a97bf 100644
+--- a/src/mares_iconhd.c
++++ b/src/mares_iconhd.c
+@@ -203,7 +203,7 @@ mares_iconhd_transfer (mares_iconhd_device_t *device,
+ 
+ 
+ dc_status_t
+-mares_iconhd_device_open (dc_device_t **out, dc_context_t *context, const char *name, unsigned int model)
++mares_iconhd_device_open (dc_device_t **out, dc_context_t *context, const void *params, unsigned int model)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -227,7 +227,7 @@ mares_iconhd_device_open (dc_device_t **out, dc_context_t *context, const char *
+ 	device->packetsize = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/mares_nemo.c b/src/mares_nemo.c
+index e479b02..3b0c9d9 100644
+--- a/src/mares_nemo.c
++++ b/src/mares_nemo.c
+@@ -88,7 +88,7 @@ static const mares_common_layout_t mares_nemo_apneist_layout = {
+ 
+ 
+ dc_status_t
+-mares_nemo_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++mares_nemo_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -108,7 +108,7 @@ mares_nemo_device_open (dc_device_t **out, dc_context_t *context, const char *na
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/mares_puck.c b/src/mares_puck.c
+index 361a753..cecc489 100644
+--- a/src/mares_puck.c
++++ b/src/mares_puck.c
+@@ -86,7 +86,7 @@ static const mares_common_layout_t mares_nemowide_layout = {
+ 
+ 
+ dc_status_t
+-mares_puck_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++mares_puck_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -106,7 +106,7 @@ mares_puck_device_open (dc_device_t **out, dc_context_t *context, const char *na
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->base.port, context, name);
++	int rc = serial_open (&device->base.port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/oceanic_atom2.c b/src/oceanic_atom2.c
+index 17e1958..29979f5 100644
+--- a/src/oceanic_atom2.c
++++ b/src/oceanic_atom2.c
+@@ -433,7 +433,7 @@ oceanic_atom2_quit (oceanic_atom2_device_t *device)
+ 
+ 
+ dc_status_t
+-oceanic_atom2_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++oceanic_atom2_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -453,7 +453,7 @@ oceanic_atom2_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	device->delay = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/oceanic_veo250.c b/src/oceanic_veo250.c
+index c7828e4..77de60a 100644
+--- a/src/oceanic_veo250.c
++++ b/src/oceanic_veo250.c
+@@ -219,7 +219,7 @@ oceanic_veo250_quit (oceanic_veo250_device_t *device)
+ 
+ 
+ dc_status_t
+-oceanic_veo250_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++oceanic_veo250_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -243,7 +243,7 @@ oceanic_veo250_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	device->last = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/oceanic_vtpro.c b/src/oceanic_vtpro.c
+index 5696045..0ad49d6 100644
+--- a/src/oceanic_vtpro.c
++++ b/src/oceanic_vtpro.c
+@@ -252,7 +252,7 @@ oceanic_vtpro_calibrate (oceanic_vtpro_device_t *device)
+ 
+ 
+ dc_status_t
+-oceanic_vtpro_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++oceanic_vtpro_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -274,7 +274,7 @@ oceanic_vtpro_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/reefnet_sensus.c b/src/reefnet_sensus.c
+index 6504342..b809749 100644
+--- a/src/reefnet_sensus.c
++++ b/src/reefnet_sensus.c
+@@ -87,7 +87,7 @@ reefnet_sensus_cancel (reefnet_sensus_device_t *device)
+ 
+ 
+ dc_status_t
+-reefnet_sensus_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++reefnet_sensus_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -111,7 +111,7 @@ reefnet_sensus_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	memset (device->handshake, 0, sizeof (device->handshake));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/reefnet_sensuspro.c b/src/reefnet_sensuspro.c
+index b462f55..1558e80 100644
+--- a/src/reefnet_sensuspro.c
++++ b/src/reefnet_sensuspro.c
+@@ -66,7 +66,7 @@ static const dc_device_vtable_t reefnet_sensuspro_device_vtable = {
+ 
+ 
+ dc_status_t
+-reefnet_sensuspro_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++reefnet_sensuspro_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -89,7 +89,7 @@ reefnet_sensuspro_device_open (dc_device_t **out, dc_context_t *context, const c
+ 	memset (device->handshake, 0, sizeof (device->handshake));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/reefnet_sensusultra.c b/src/reefnet_sensusultra.c
+index 6405830..8624e0b 100644
+--- a/src/reefnet_sensusultra.c
++++ b/src/reefnet_sensusultra.c
+@@ -75,7 +75,7 @@ static const dc_device_vtable_t reefnet_sensusultra_device_vtable = {
+ 
+ 
+ dc_status_t
+-reefnet_sensusultra_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++reefnet_sensusultra_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -98,7 +98,7 @@ reefnet_sensusultra_device_open (dc_device_t **out, dc_context_t *context, const
+ 	memset (device->handshake, 0, sizeof (device->handshake));
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/serial.h b/src/serial.h
+index 5a9d8ea..636265d 100644
+--- a/src/serial.h
++++ b/src/serial.h
+@@ -59,7 +59,7 @@ typedef void (*serial_callback_t) (const char *name, void *userdata);
+ 
+ int serial_enumerate (serial_callback_t callback, void *userdata);
+ 
+-int serial_open (serial_t **device, dc_context_t *context, const char* name);
++int serial_open (serial_t **device, dc_context_t *context, const void *params);
+ 
+ int serial_close (serial_t *device);
+ 
+diff --git a/src/serial_ftdi.c b/src/serial_ftdi.c
+index 2295890..cf12779 100644
+--- a/src/serial_ftdi.c
++++ b/src/serial_ftdi.c
+@@ -70,7 +70,7 @@ struct serial_t {
+ 
+ // Used internally for opening ftdi devices
+ int
+-open_ftdi_device (struct ftdi_context *ftdi_ctx)
++open_ftdi_device_fd (struct ftdi_context *ftdi_ctx, int usb_fd)
+ {
+ 	int accepted_pids[] = { 0x6001, 0x6010, 0x6011, // Suunto (Smart Interface), Heinrichs Weikamp
+ 		0xF460, // Oceanic
+@@ -109,12 +109,13 @@ serial_enumerate (serial_callback_t callback, void *userdata)
+ //
+ 
+ int
+-serial_open (serial_t **out, dc_context_t *context, const char* name)
++serial_open (serial_t **out, dc_context_t *context, const void *params)
+ {
++
+ 	if (out == NULL)
+ 		return -1; // EINVAL (Invalid argument)
+-
+-        INFO (context, "Open: name=%s", name ? name : "");
++	int usb_fd = * (int *) params;
++        INFO (context, "Open: fd=%d", usb_fd);
+ 
+         // Allocate memory.
+         serial_t *device = (serial_t *) malloc (sizeof (serial_t));
+@@ -148,7 +149,7 @@ serial_open (serial_t **out, dc_context_t *context, const char* name)
+ 		return -1;
+ 	}
+ 
+-        if (open_ftdi_device(ftdi_ctx) < 0) {
++        if (open_ftdi_device_fd(ftdi_ctx, usb_fd) < 0) {
+                 ERROR (context, ftdi_get_error_string(ftdi_ctx));
+                 return -1;
+         }
+diff --git a/src/serial_posix.c b/src/serial_posix.c
+index aebcdc5..0167334 100644
+--- a/src/serial_posix.c
++++ b/src/serial_posix.c
+@@ -127,8 +127,9 @@ serial_enumerate (serial_callback_t callback, void *userdata)
+ //
+ 
+ int
+-serial_open (serial_t **out, dc_context_t *context, const char* name)
++serial_open (serial_t **out, dc_context_t *context, const void *params)
+ {
++	const char *name = (const char *) params;
+ 	if (out == NULL)
+ 		return -1; // EINVAL (Invalid argument)
+ 
+diff --git a/src/serial_win32.c b/src/serial_win32.c
+index 9d5572c..069090e 100644
+--- a/src/serial_win32.c
++++ b/src/serial_win32.c
+@@ -106,8 +106,9 @@ serial_enumerate (serial_callback_t callback, void *userdata)
+ //
+ 
+ int
+-serial_open (serial_t **out, dc_context_t *context, const char* name)
++serial_open (serial_t **out, dc_context_t *context, const void *params)
+ {
++	const char *name = (const char *) params;
+ 	if (out == NULL)
+ 		return -1; // ERROR_INVALID_PARAMETER (The parameter is incorrect)
+ 
+diff --git a/src/shearwater_common.c b/src/shearwater_common.c
+index b809a3c..9a9cfeb 100644
+--- a/src/shearwater_common.c
++++ b/src/shearwater_common.c
+@@ -38,10 +38,10 @@
+ #define EXITCODE(n) ((n) < 0 ? (n) : 0)
+ 
+ dc_status_t
+-shearwater_common_open (shearwater_common_device_t *device, dc_context_t *context, const char *name)
++shearwater_common_open (shearwater_common_device_t *device, dc_context_t *context, const void *params)
+ {
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		return DC_STATUS_IO;
+diff --git a/src/shearwater_common.h b/src/shearwater_common.h
+index a07de14..10930c0 100644
+--- a/src/shearwater_common.h
++++ b/src/shearwater_common.h
+@@ -38,7 +38,7 @@ typedef struct shearwater_common_device_t {
+ } shearwater_common_device_t;
+ 
+ dc_status_t
+-shearwater_common_open (shearwater_common_device_t *device, dc_context_t *context, const char *name);
++shearwater_common_open (shearwater_common_device_t *device, dc_context_t *context, const void *params);
+ 
+ dc_status_t
+ shearwater_common_close (shearwater_common_device_t *device);
+diff --git a/src/shearwater_petrel.c b/src/shearwater_petrel.c
+index 3534a26..b4e9bd4 100644
+--- a/src/shearwater_petrel.c
++++ b/src/shearwater_petrel.c
+@@ -77,7 +77,7 @@ str2num (unsigned char data[], unsigned int size, unsigned int offset)
+ 
+ 
+ dc_status_t
+-shearwater_petrel_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++shearwater_petrel_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	dc_status_t rc = DC_STATUS_SUCCESS;
+ 
+@@ -98,7 +98,7 @@ shearwater_petrel_device_open (dc_device_t **out, dc_context_t *context, const c
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	rc = shearwater_common_open (&device->base, context, name);
++	rc = shearwater_common_open (&device->base, context, params);
+ 	if (rc != DC_STATUS_SUCCESS) {
+ 		free (device);
+ 		return rc;
+diff --git a/src/shearwater_predator.c b/src/shearwater_predator.c
+index e8a44ac..09b9a5e 100644
+--- a/src/shearwater_predator.c
++++ b/src/shearwater_predator.c
+@@ -63,7 +63,7 @@ static const dc_device_vtable_t shearwater_predator_device_vtable = {
+ 
+ 
+ dc_status_t
+-shearwater_predator_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++shearwater_predator_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	dc_status_t rc = DC_STATUS_SUCCESS;
+ 
+@@ -84,7 +84,7 @@ shearwater_predator_device_open (dc_device_t **out, dc_context_t *context, const
+ 	memset (device->fingerprint, 0, sizeof (device->fingerprint));
+ 
+ 	// Open the device.
+-	rc = shearwater_common_open (&device->base, context, name);
++	rc = shearwater_common_open (&device->base, context, params);
+ 	if (rc != DC_STATUS_SUCCESS) {
+ 		free (device);
+ 		return rc;
+diff --git a/src/suunto_d9.c b/src/suunto_d9.c
+index fa4a263..9919624 100644
+--- a/src/suunto_d9.c
++++ b/src/suunto_d9.c
+@@ -127,7 +127,7 @@ suunto_d9_device_autodetect (suunto_d9_device_t *device, unsigned int model)
+ 
+ 
+ dc_status_t
+-suunto_d9_device_open (dc_device_t **out, dc_context_t *context, const char *name, unsigned int model)
++suunto_d9_device_open (dc_device_t **out, dc_context_t *context, const void *params, unsigned int model)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -146,7 +146,7 @@ suunto_d9_device_open (dc_device_t **out, dc_context_t *context, const char *nam
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/suunto_eon.c b/src/suunto_eon.c
+index c9c78d2..32c44e8 100644
+--- a/src/suunto_eon.c
++++ b/src/suunto_eon.c
+@@ -69,7 +69,7 @@ static const suunto_common_layout_t suunto_eon_layout = {
+ 
+ 
+ dc_status_t
+-suunto_eon_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++suunto_eon_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -88,7 +88,7 @@ suunto_eon_device_open (dc_device_t **out, dc_context_t *context, const char *na
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/suunto_solution.c b/src/suunto_solution.c
+index 1d7b227..3a0bd28 100644
+--- a/src/suunto_solution.c
++++ b/src/suunto_solution.c
+@@ -63,7 +63,7 @@ static const dc_device_vtable_t suunto_solution_device_vtable = {
+ 
+ 
+ dc_status_t
+-suunto_solution_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++suunto_solution_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -82,7 +82,7 @@ suunto_solution_device_open (dc_device_t **out, dc_context_t *context, const cha
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/suunto_vyper.c b/src/suunto_vyper.c
+index b259259..1d7c747 100644
+--- a/src/suunto_vyper.c
++++ b/src/suunto_vyper.c
+@@ -89,7 +89,7 @@ static const suunto_common_layout_t suunto_spyder_layout = {
+ 
+ 
+ dc_status_t
+-suunto_vyper_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++suunto_vyper_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -108,7 +108,7 @@ suunto_vyper_device_open (dc_device_t **out, dc_context_t *context, const char *
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/suunto_vyper2.c b/src/suunto_vyper2.c
+index e6dbd27..0c3c564 100644
+--- a/src/suunto_vyper2.c
++++ b/src/suunto_vyper2.c
+@@ -78,7 +78,7 @@ static const suunto_common2_layout_t suunto_helo2_layout = {
+ 
+ 
+ dc_status_t
+-suunto_vyper2_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++suunto_vyper2_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -97,7 +97,7 @@ suunto_vyper2_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/uwatec_aladin.c b/src/uwatec_aladin.c
+index d01a92a..09b8cc2 100644
+--- a/src/uwatec_aladin.c
++++ b/src/uwatec_aladin.c
+@@ -72,7 +72,7 @@ static const dc_device_vtable_t uwatec_aladin_device_vtable = {
+ 
+ 
+ dc_status_t
+-uwatec_aladin_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++uwatec_aladin_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -94,7 +94,7 @@ uwatec_aladin_device_open (dc_device_t **out, dc_context_t *context, const char
+ 	device->devtime = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/uwatec_memomouse.c b/src/uwatec_memomouse.c
+index 101ff19..7b45ae2 100644
+--- a/src/uwatec_memomouse.c
++++ b/src/uwatec_memomouse.c
+@@ -68,7 +68,7 @@ static const dc_device_vtable_t uwatec_memomouse_device_vtable = {
+ 
+ 
+ dc_status_t
+-uwatec_memomouse_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++uwatec_memomouse_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -90,7 +90,7 @@ uwatec_memomouse_device_open (dc_device_t **out, dc_context_t *context, const ch
+ 	device->devtime = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/uwatec_meridian.c b/src/uwatec_meridian.c
+index fbf26c7..0dd7966 100644
+--- a/src/uwatec_meridian.c
++++ b/src/uwatec_meridian.c
+@@ -184,7 +184,7 @@ uwatec_meridian_handshake (uwatec_meridian_device_t *device)
+ 
+ 
+ dc_status_t
+-uwatec_meridian_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++uwatec_meridian_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -206,7 +206,7 @@ uwatec_meridian_device_open (dc_device_t **out, dc_context_t *context, const cha
+ 	device->devtime = 0;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+diff --git a/src/zeagle_n2ition3.c b/src/zeagle_n2ition3.c
+index 16b42f5..9a98201 100644
+--- a/src/zeagle_n2ition3.c
++++ b/src/zeagle_n2ition3.c
+@@ -135,7 +135,7 @@ zeagle_n2ition3_init (zeagle_n2ition3_device_t *device)
+ }
+ 
+ dc_status_t
+-zeagle_n2ition3_device_open (dc_device_t **out, dc_context_t *context, const char *name)
++zeagle_n2ition3_device_open (dc_device_t **out, dc_context_t *context, const void *params)
+ {
+ 	if (out == NULL)
+ 		return DC_STATUS_INVALIDARGS;
+@@ -154,7 +154,7 @@ zeagle_n2ition3_device_open (dc_device_t **out, dc_context_t *context, const cha
+ 	device->port = NULL;
+ 
+ 	// Open the device.
+-	int rc = serial_open (&device->port, context, name);
++	int rc = serial_open (&device->port, context, params);
+ 	if (rc == -1) {
+ 		ERROR (context, "Failed to open the serial port.");
+ 		free (device);
+-- 
+1.9.3
+

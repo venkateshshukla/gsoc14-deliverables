@@ -1,0 +1,618 @@
+From 5eeefed0b62dc0e7582a81cbb1e87c00647f7ced Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sun, 17 Aug 2014 04:51:15 +0530
+Subject: [PATCH] Patches for libusb and libftdi passing fd
+
+These patches contains functions for passing file descriptor all around.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ build.sh                        |  18 +-
+ libftdi-usb-modifications.patch | 352 ++++++++++++++++++++++++++++++++++++++++
+ libusb-usb-modifications.patch  | 191 ++++++++++++++++++++++
+ 3 files changed, 557 insertions(+), 4 deletions(-)
+ create mode 100644 libftdi-usb-modifications.patch
+ create mode 100644 libusb-usb-modifications.patch
+
+diff --git a/build.sh b/build.sh
+index df2def2..e7999f7 100644
+--- a/build.sh
++++ b/build.sh
+@@ -1,9 +1,9 @@
+ #!/bin/bash
+ set -e
+ # Configure where we can find things here
+-export ANDROID_NDK_ROOT=$PWD/../android-ndk-r9d
+-export ANDROID_SDK_ROOT=$PWD/../android-sdk-linux
+-export QT5_ANDROID=$PWD/../Qt5.2.1/5.2.1
++export ANDROID_NDK_ROOT=/android_ndk
++export ANDROID_SDK_ROOT=/android_sdk
++export QT5_ANDROID=/Qt5.3.0/5.3
+ 
+ # arm or x86
+ export ARCH=${1-arm}
+@@ -119,8 +119,12 @@ if [ ! -e libusb-1.0.9 ] ; then
+ 	tar -jxf libusb-1.0.9.tar.bz2
+ fi
+ if ! grep -q __ANDROID__ libusb-1.0.9/libusb/io.c ; then
++	pushd libusb-1.0.9
+ 	# patch libusb to build with android-ndk
+-	patch -p1 < libusb-1.0.9-android.patch  libusb-1.0.9/libusb/io.c
++	patch -p1 < ../libusb-1.0.9-android.patch
++	# patch libusb to allow usage of fd
++	patch -p1 < ../libusb-usb-modifications.patch
++	popd
+ fi
+ if [ ! -e $PKG_CONFIG_PATH/libusb-1.0.pc ] ; then
+ 	mkdir -p libusb-build-$ARCH
+@@ -137,6 +141,12 @@ fi
+ if [ ! -e libftdi1-1.1 ] ; then
+ 	tar -jxf libftdi1-1.1.tar.bz2
+ fi
++
++if ! grep -q HAVE_LIBUSB_OPEN_FD libftdi1-1.1/src/ftdi.c ; then
++	pushd libftdi1-1.1
++	patch -p1 < ../libftdi-usb-modifications.patch
++	popd
++fi
+ if [ ! -e $PKG_CONFIG_PATH/libftdipp1.pc ] ; then
+ 	mkdir -p libftdi1-build-$ARCH
+ 	pushd libftdi1-build-$ARCH
+diff --git a/libftdi-usb-modifications.patch b/libftdi-usb-modifications.patch
+new file mode 100644
+index 0000000..917d919
+--- /dev/null
++++ b/libftdi-usb-modifications.patch
+@@ -0,0 +1,352 @@
++From 76a42bd0bcec38ed40d37517015a4ff91658b7e3 Mon Sep 17 00:00:00 2001
++From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
++Date: Tue, 10 Jun 2014 10:37:21 +0530
++Subject: [PATCH] Added functions for open using USB file descriptor
++
++Android USB api provides file descriptor. This can be utilised to make a libusb
++device. Libusb has been adequately modified to utilise fd. Added functions
++which to use corresponding libusb functions. One crucial point is not to close
++the USB device Libftdi normally closes the usb device and opens it again when to
++be used. To do that on android, one had to go back to Android java API. Hence,
++do not close the device nor try to open it again on android.
++
++libusb_open_fd is a function that is needed on android. But if it is not
++present, do not fail. Just dont compile functions that require this.
++
++Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
++---
++ CMakeLists.txt |   8 ++
++ src/ftdi.c     | 272 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ src/ftdi.h     |   7 ++
++ 3 files changed, 287 insertions(+)
++
++diff --git a/CMakeLists.txt b/CMakeLists.txt
++index ee21a8f..4559d10 100644
++--- a/CMakeLists.txt
+++++ b/CMakeLists.txt
++@@ -26,6 +26,14 @@ endif(${CMAKE_BUILD_TYPE} STREQUAL Debug)
++ find_package ( USB1 REQUIRED )
++ include_directories ( ${LIBUSB_INCLUDE_DIR} )
++ 
+++set(CMAKE_REQUIRED_INCLUDES ${LIBUSB_INCLUDE_DIR})
+++set(CMAKE_REQUIRED_LIBRARIES ${LIBUSB_LIBRARIES})
+++include(CheckFunctionExists)
+++check_function_exists(libusb_open_fd HAVE_LIBUSB_OPEN_FD)
+++if ( DEFINED HAVE_LIBUSB_OPEN_FD)
+++	add_definitions(-DHAVE_LIBUSB_OPEN_FD)
+++endif ()
+++
++ # Find Boost (optional package)
++ find_package(Boost)
++ 
++diff --git a/src/ftdi.c b/src/ftdi.c
++index c62428d..54d6edf 100644
++--- a/src/ftdi.c
+++++ b/src/ftdi.c
++@@ -623,6 +623,132 @@ int ftdi_usb_open_dev(struct ftdi_context *ftdi, libusb_device *dev)
++     ftdi_error_return(0, "all fine");
++ }
++ 
+++#ifdef HAVE_LIBUSB_OPEN_FD
+++/**
+++    Opens a ftdi device given by an usb_device using the given file descriptor.
+++    To be used on android.
+++
+++    \param ftdi pointer to ftdi_context
+++    \param dev libusb usb_dev to use
+++    \param fd USB file descriptor
+++
+++    \retval  0: all fine
+++    \retval -3: unable to config device
+++    \retval -4: unable to open device
+++    \retval -5: unable to claim device
+++    \retval -6: reset failed
+++    \retval -7: set baudrate failed
+++    \retval -8: ftdi context invalid
+++    \retval -9: libusb_get_device_descriptor() failed
+++    \retval -10: libusb_get_config_descriptor() failed
+++    \retval -11: libusb_detach_kernel_driver() failed
+++    \retval -12: libusb_get_configuration() failed
+++*/
+++int ftdi_usb_open_fd_dev(struct ftdi_context *ftdi, libusb_device *dev, int fd)
+++{
+++    struct libusb_device_descriptor desc;
+++    struct libusb_config_descriptor *config0;
+++    int cfg, cfg0, detach_errno = 0;
+++
+++    if (ftdi == NULL)
+++        ftdi_error_return(-8, "ftdi context invalid");
+++
+++    // As the USB device is already opened, do not open it
+++    // again.
+++
+++    if (libusb_get_device_descriptor(dev, &desc) < 0)
+++        ftdi_error_return(-9, "libusb_get_device_descriptor() failed");
+++
+++    if (libusb_get_config_descriptor(dev, 0, &config0) < 0)
+++        ftdi_error_return(-10, "libusb_get_config_descriptor() failed");
+++    cfg0 = config0->bConfigurationValue;
+++    libusb_free_config_descriptor (config0);
+++
+++    // Try to detach ftdi_sio kernel module.
+++    //
+++    // The return code is kept in a separate variable and only parsed
+++    // if usb_set_configuration() or usb_claim_interface() fails as the
+++    // detach operation might be denied and everything still works fine.
+++    // Likely scenario is a static ftdi_sio kernel module.
+++    if (ftdi->module_detach_mode == AUTO_DETACH_SIO_MODULE)
+++    {
+++        if (libusb_detach_kernel_driver(ftdi->usb_dev, ftdi->interface) !=0)
+++            detach_errno = errno;
+++    }
+++
+++    if (libusb_get_configuration (ftdi->usb_dev, &cfg) < 0)
+++        ftdi_error_return(-12, "libusb_get_configuration () failed");
+++    // set configuration (needed especially for windows)
+++    // tolerate EBUSY: one device with one configuration, but two interfaces
+++    //    and libftdi sessions to both interfaces (e.g. FT2232)
+++    if (desc.bNumConfigurations > 0 && cfg != cfg0)
+++    {
+++        if (libusb_set_configuration(ftdi->usb_dev, cfg0) < 0)
+++        {
+++            ftdi_usb_close_internal (ftdi);
+++            if (detach_errno == EPERM)
+++            {
+++                ftdi_error_return(-8, "inappropriate permissions on device!");
+++            }
+++            else
+++            {
+++                ftdi_error_return(-3, "unable to set usb configuration. Make sure the default FTDI driver is not in use");
+++            }
+++        }
+++    }
+++
+++    if (libusb_claim_interface(ftdi->usb_dev, ftdi->interface) < 0)
+++    {
+++        ftdi_usb_close_internal (ftdi);
+++        if (detach_errno == EPERM)
+++        {
+++            ftdi_error_return(-8, "inappropriate permissions on device!");
+++        }
+++        else
+++        {
+++            ftdi_error_return(-5, "unable to claim usb device. Make sure the default FTDI driver is not in use");
+++        }
+++    }
+++
+++    if (ftdi_usb_reset (ftdi) != 0)
+++    {
+++        ftdi_usb_close_internal (ftdi);
+++        ftdi_error_return(-6, "ftdi_usb_reset failed");
+++    }
+++
+++    // Try to guess chip type
+++    // Bug in the BM type chips: bcdDevice is 0x200 for serial == 0
+++    if (desc.bcdDevice == 0x400 || (desc.bcdDevice == 0x200
+++                                    && desc.iSerialNumber == 0))
+++        ftdi->type = TYPE_BM;
+++    else if (desc.bcdDevice == 0x200)
+++        ftdi->type = TYPE_AM;
+++    else if (desc.bcdDevice == 0x500)
+++        ftdi->type = TYPE_2232C;
+++    else if (desc.bcdDevice == 0x600)
+++        ftdi->type = TYPE_R;
+++    else if (desc.bcdDevice == 0x700)
+++        ftdi->type = TYPE_2232H;
+++    else if (desc.bcdDevice == 0x800)
+++        ftdi->type = TYPE_4232H;
+++    else if (desc.bcdDevice == 0x900)
+++        ftdi->type = TYPE_232H;
+++    else if (desc.bcdDevice == 0x1000)
+++        ftdi->type = TYPE_230X;
+++
+++    // Determine maximum packet size
+++    ftdi->max_packet_size = _ftdi_determine_max_packet_size(ftdi, dev);
+++
+++    if (ftdi_set_baudrate (ftdi, 9600) != 0)
+++    {
+++        ftdi_usb_close_internal (ftdi);
+++        ftdi_error_return(-7, "set baudrate failed");
+++    }
+++
+++    ftdi_error_return(0, "all fine");
+++}
+++#endif //HAVE_LIBUSB_OPEN_FD
+++
++ /**
++     Opens the first device with a given vendor and product ids.
++ 
++@@ -760,6 +886,152 @@ int ftdi_usb_open_desc_index(struct ftdi_context *ftdi, int vendor, int product,
++     ftdi_error_return_free_device_list(-3, "device not found", devs);
++ }
++ 
+++#ifdef HAVE_LIBUSB_OPEN_FD
+++/**
+++    Opens the first device with a given vendor and product ids.
+++
+++    \param ftdi pointer to ftdi_context
+++    \param vendor Vendor ID
+++    \param product Product ID
+++    \param fd USB file descriptor
+++
+++    \retval same as ftdi_usb_open_desc()
+++*/
+++int ftdi_usb_open_fd(struct ftdi_context *ftdi, int vendor, int product, int fd)
+++{
+++    return ftdi_usb_open_fd_desc(ftdi, vendor, product, NULL, NULL, fd);
+++}
+++
+++/**
+++    Opens the first device with a given, vendor id, product id,
+++    description and serial.
+++
+++    \param ftdi pointer to ftdi_context
+++    \param vendor Vendor ID
+++    \param product Product ID
+++    \param description Description to search for. Use NULL if not needed.
+++    \param serial Serial to search for. Use NULL if not needed.
+++    \param fd USB file descriptor
+++
+++    \retval  0: all fine
+++    \retval -3: usb device not found
+++    \retval -4: unable to open device
+++    \retval -5: unable to claim device
+++    \retval -6: reset failed
+++    \retval -7: set baudrate failed
+++    \retval -8: get product description failed
+++    \retval -9: get serial number failed
+++    \retval -12: libusb_get_device_list() failed
+++    \retval -13: libusb_get_device_descriptor() failed
+++*/
+++int ftdi_usb_open_fd_desc(struct ftdi_context *ftdi, int vendor, int product,
+++                       const char* description, const char* serial, int fd)
+++{
+++    return ftdi_usb_open_fd_desc_index(ftdi,vendor,product,description,serial,0, fd);
+++}
+++
+++/**
+++    Opens the index-th device with a given, vendor id, product id,
+++    description and serial.
+++
+++    \param ftdi pointer to ftdi_context
+++    \param vendor Vendor ID
+++    \param product Product ID
+++    \param description Description to search for. Use NULL if not needed.
+++    \param serial Serial to search for. Use NULL if not needed.
+++    \param index Number of matching device to open if there are more than one, starts with 0.
+++    \param fd USB file descriptor
+++
+++    \retval  0: all fine
+++    \retval -1: usb_find_busses() failed
+++    \retval -2: usb_find_devices() failed
+++    \retval -3: usb device not found
+++    \retval -4: unable to open device
+++    \retval -5: unable to claim device
+++    \retval -6: reset failed
+++    \retval -7: set baudrate failed
+++    \retval -8: get product description failed
+++    \retval -9: get serial number failed
+++    \retval -10: unable to close device
+++    \retval -11: ftdi context invalid
+++*/
+++int ftdi_usb_open_fd_desc_index(struct ftdi_context *ftdi, int vendor, int product,
+++                             const char* description, const char* serial, unsigned int index, int fd)
+++{
+++    libusb_device *dev;
+++    libusb_device **devs;
+++    char string[256];
+++    int i = 0;
+++
+++    if (ftdi == NULL)
+++        ftdi_error_return(-11, "ftdi context invalid");
+++
+++    if (libusb_get_device_list(ftdi->usb_ctx, &devs) < 0)
+++        ftdi_error_return(-12, "libusb_get_device_list() failed");
+++
+++    while ((dev = devs[i++]) != NULL)
+++    {
+++        struct libusb_device_descriptor desc;
+++        int res;
+++
+++        if (libusb_get_device_descriptor(dev, &desc) < 0)
+++            ftdi_error_return_free_device_list(-13, "libusb_get_device_descriptor() failed", devs);
+++
+++        if (desc.idVendor == vendor && desc.idProduct == product)
+++        {
+++            if (libusb_open_fd(dev, &ftdi->usb_dev, fd) < 0)
+++                ftdi_error_return_free_device_list(-4, "usb_open() failed", devs);
+++
+++            if (description != NULL)
+++            {
+++                if (libusb_get_string_descriptor_ascii(ftdi->usb_dev, desc.iProduct, (unsigned char *)string, sizeof(string)) < 0)
+++                {
+++                    ftdi_usb_close_internal (ftdi);
+++                    ftdi_error_return_free_device_list(-8, "unable to fetch product description", devs);
+++                }
+++                if (strncmp(string, description, sizeof(string)) != 0)
+++                {
+++                    ftdi_usb_close_internal (ftdi);
+++                    continue;
+++                }
+++            }
+++            if (serial != NULL)
+++            {
+++                if (libusb_get_string_descriptor_ascii(ftdi->usb_dev, desc.iSerialNumber, (unsigned char *)string, sizeof(string)) < 0)
+++                {
+++                    ftdi_usb_close_internal (ftdi);
+++                    ftdi_error_return_free_device_list(-9, "unable to fetch serial number", devs);
+++                }
+++                if (strncmp(string, serial, sizeof(string)) != 0)
+++                {
+++                    ftdi_usb_close_internal (ftdi);
+++                    continue;
+++                }
+++            }
+++
+++	    // After going to such lengths to retrieve the file descriptor
+++	    // of USB device, do not close the device. It wil render all the
+++	    // effort useless.
+++
+++            //ftdi_usb_close_internal (ftdi);
+++
+++            if (index > 0)
+++            {
+++                index--;
+++                continue;
+++            }
+++
+++            res = ftdi_usb_open_fd_dev(ftdi, dev, fd);
+++            libusb_free_device_list(devs,1);
+++            return res;
+++        }
+++    }
+++
+++    // device not found
+++    ftdi_error_return_free_device_list(-3, "device not found", devs);
+++}
+++#endif // HAVE_LIBUSB_OPEN_FD
+++
++ /**
++     Opens the ftdi-device described by a description-string.
++     Intended to be used for parsing a device-description given as commandline argument.
++diff --git a/src/ftdi.h b/src/ftdi.h
++index 07fcd71..9261cf4 100644
++--- a/src/ftdi.h
+++++ b/src/ftdi.h
++@@ -485,6 +485,13 @@ extern "C"
++     int ftdi_usb_open_dev(struct ftdi_context *ftdi, struct libusb_device *dev);
++     int ftdi_usb_open_string(struct ftdi_context *ftdi, const char* description);
++ 
+++    int ftdi_usb_open_fd(struct ftdi_context *ftdi, int vendor, int product, int fd);
+++    int ftdi_usb_open_fd_desc(struct ftdi_context *ftdi, int vendor, int product,
+++                           const char* description, const char* serial, int fd);
+++    int ftdi_usb_open_fd_desc_index(struct ftdi_context *ftdi, int vendor, int product,
+++                                 const char* description, const char* serial, unsigned int index, int fd);
+++    int ftdi_usb_open_fd_dev(struct ftdi_context *ftdi, struct libusb_device *dev, int fd);
+++
++     int ftdi_usb_close(struct ftdi_context *ftdi);
++     int ftdi_usb_reset(struct ftdi_context *ftdi);
++     int ftdi_usb_purge_rx_buffer(struct ftdi_context *ftdi);
++-- 
++1.9.3
++
+diff --git a/libusb-usb-modifications.patch b/libusb-usb-modifications.patch
+new file mode 100644
+index 0000000..c231c53
+--- /dev/null
++++ b/libusb-usb-modifications.patch
+@@ -0,0 +1,191 @@
++From c703d2c2b117cda7d2e2e30071e9790e7979f900 Mon Sep 17 00:00:00 2001
++From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
++Date: Thu, 10 Jul 2014 19:16:54 +0530
++Subject: [PATCH 2/2] Modifications for usage in Android
++
++Android allows access to USB device only via its java based USB API. But as a
++workaround for native devices using libusb, one can obtain the file descriptor
++of USB device using UsbDeviceConnection.getFileDescriptor() method. This can
++then be transferred to native side using JNI. The function libusb_open_fd() must
++be used on android and the obtained fd should be passed on. Libusb will use this
++file descriptor for all subsequent processing. A libusb_device_handle will be
++returned as is usual and can be used for all libusb related stuff.
++
++Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
++---
++ libusb/core.c           | 69 +++++++++++++++++++++++++++++++++++++++++++++++++
++ libusb/libusb.h         |  2 ++
++ libusb/libusbi.h        |  8 ++++++
++ libusb/os/linux_usbfs.c | 37 ++++++++++++++++++++++++++
++ 4 files changed, 116 insertions(+)
++
++diff --git a/libusb/core.c b/libusb/core.c
++index 767dcbf..fae8b2c 100644
++--- a/libusb/core.c
+++++ b/libusb/core.c
++@@ -987,6 +987,75 @@ int API_EXPORTED libusb_open(libusb_device *dev,
++ }
++ 
++ /** \ingroup dev
+++ * This function is for usage on android.
+++ * Obtain the USB file descriptor from android using its USB API. Use it to
+++ * obtain a libusb_device_handle. The handle allows you to perform
+++ * I/O on the device in question.
+++ *
+++ * Internally, this function adds a reference to the device and makes it
+++ * available to you through libusb_get_device(). This reference is removed
+++ * during libusb_close().
+++ *
+++ * This is a non-blocking function; no requests are sent over the bus.
+++ *
+++ * \param dev the device to open
+++ * \param handle output location for the returned device handle pointer. Only
+++ * populated when the return code is 0.
+++ * \returns 0 on success
+++ * \returns LIBUSB_ERROR_NO_MEM on memory allocation failure
+++ * \returns LIBUSB_ERROR_ACCESS if the user has insufficient permissions
+++ * \returns LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
+++ * \returns another LIBUSB_ERROR code on other failure
+++ */
+++int API_EXPORTED libusb_open_fd(libusb_device *dev,
+++	libusb_device_handle **handle, int fd)
+++{
+++	struct libusb_context *ctx = DEVICE_CTX(dev);
+++	struct libusb_device_handle *_handle;
+++	size_t priv_size = usbi_backend->device_handle_priv_size;
+++	int r;
+++	usbi_dbg("open %d.%d", dev->bus_number, dev->device_address);
+++
+++	_handle = malloc(sizeof(*_handle) + priv_size);
+++	if (!_handle)
+++		return LIBUSB_ERROR_NO_MEM;
+++
+++	r = usbi_mutex_init(&_handle->lock, NULL);
+++	if (r) {
+++		free(_handle);
+++		return LIBUSB_ERROR_OTHER;
+++	}
+++
+++	_handle->dev = libusb_ref_device(dev);
+++	_handle->claimed_interfaces = 0;
+++	memset(&_handle->os_priv, 0, priv_size);
+++
+++	r = usbi_backend->open_fd(_handle, fd);
+++	if (r < 0) {
+++		usbi_dbg("open %d.%d returns %d", dev->bus_number, dev->device_address, r);
+++		libusb_unref_device(dev);
+++		usbi_mutex_destroy(&_handle->lock);
+++		free(_handle);
+++		return r;
+++	}
+++
+++	usbi_mutex_lock(&ctx->open_devs_lock);
+++	list_add(&_handle->list, &ctx->open_devs);
+++	usbi_mutex_unlock(&ctx->open_devs_lock);
+++	*handle = _handle;
+++
+++	/* At this point, we want to interrupt any existing event handlers so
+++	 * that they realise the addition of the new device's poll fd. One
+++	 * example when this is desirable is if the user is running a separate
+++	 * dedicated libusb events handling thread, which is running with a long
+++	 * or infinite timeout. We want to interrupt that iteration of the loop,
+++	 * so that it picks up the new fd, and then continues. */
+++	usbi_fd_notification(ctx);
+++
+++	return 0;
+++}
+++
+++/** \ingroup dev
++  * Convenience function for finding a device with a particular
++  * <tt>idVendor</tt>/<tt>idProduct</tt> combination. This function is intended
++  * for those scenarios where you are using libusb to knock up a quick test
++diff --git a/libusb/libusb.h b/libusb/libusb.h
++index 044012b..dee6285 100644
++--- a/libusb/libusb.h
+++++ b/libusb/libusb.h
++@@ -984,6 +984,8 @@ int LIBUSB_CALL libusb_get_max_iso_packet_size(libusb_device *dev,
++ 	unsigned char endpoint);
++ 
++ int LIBUSB_CALL libusb_open(libusb_device *dev, libusb_device_handle **handle);
+++int LIBUSB_CALL libusb_open_fd(libusb_device *dev, libusb_device_handle **handle,
+++	int fd);
++ void LIBUSB_CALL libusb_close(libusb_device_handle *dev_handle);
++ libusb_device * LIBUSB_CALL libusb_get_device(libusb_device_handle *dev_handle);
++ 
++diff --git a/libusb/libusbi.h b/libusb/libusbi.h
++index 3b602d2..0b0857e 100644
++--- a/libusb/libusbi.h
+++++ b/libusb/libusbi.h
++@@ -568,6 +568,14 @@ struct usbi_os_backend {
++ 	 */
++ 	int (*open)(struct libusb_device_handle *handle);
++ 
+++	/*
+++	 *  Using Android USB API, obtain the file descriptor of the usb device.
+++	 *  Open the device using the obtained file descriptor. File descriptor
+++	 *  is substitited as such without trying to open the usb device again.
+++	 *  This function is for usage on android.
+++	 */
+++	int (*open_fd)(struct libusb_device_handle *handle, int fd);
+++
++ 	/* Close a device such that the handle cannot be used again. Your backend
++ 	 * should destroy any resources that were allocated in the open path.
++ 	 * This may also be a good place to call usbi_remove_pollfd() to inform
++diff --git a/libusb/os/linux_usbfs.c b/libusb/os/linux_usbfs.c
++index 0717fa0..d98d6e9 100644
++--- a/libusb/os/linux_usbfs.c
+++++ b/libusb/os/linux_usbfs.c
++@@ -1240,6 +1240,37 @@ static int op_open(struct libusb_device_handle *handle)
++ 	return usbi_add_pollfd(HANDLE_CTX(handle), hpriv->fd, POLLOUT);
++ }
++ 
+++#ifdef __ANDROID__
+++static int op_open_fd(struct libusb_device_handle *handle, int fd)
+++{
+++	struct linux_device_handle_priv *hpriv = _device_handle_priv(handle);
+++	char filename[PATH_MAX];
+++
+++	_get_usbfs_path(handle->dev, filename);
+++	usbi_dbg("opening %s", filename);
+++	hpriv->fd = fd;
+++	if (hpriv->fd < 0) {
+++		if (errno == EACCES) {
+++			usbi_err(HANDLE_CTX(handle), "libusb couldn't open USB device %s: "
+++				"Permission denied.", filename);
+++			usbi_err(HANDLE_CTX(handle),
+++				"libusb requires write access to USB device nodes.");
+++			return LIBUSB_ERROR_ACCESS;
+++		} else if (errno == ENOENT) {
+++			usbi_err(HANDLE_CTX(handle), "libusb couldn't open USB device %s: "
+++				"No such file or directory.", filename);
+++			return LIBUSB_ERROR_NO_DEVICE;
+++		} else {
+++			usbi_err(HANDLE_CTX(handle),
+++				"open failed, code %d errno %d", hpriv->fd, errno);
+++			return LIBUSB_ERROR_IO;
+++		}
+++	}
+++
+++	return usbi_add_pollfd(HANDLE_CTX(handle), hpriv->fd, POLLOUT);
+++}
+++#endif
+++
++ static void op_close(struct libusb_device_handle *dev_handle)
++ {
++ 	int fd = _device_handle_priv(dev_handle)->fd;
++@@ -2402,6 +2433,12 @@ const struct usbi_os_backend linux_usbfs_backend = {
++ 	.get_config_descriptor = op_get_config_descriptor,
++ 
++ 	.open = op_open,
+++#ifdef __ANDROID__
+++	.open_fd = op_open_fd,
+++#else
+++	.open_fd = NULL,
+++#endif
+++
++ 	.close = op_close,
++ 	.get_configuration = op_get_configuration,
++ 	.set_configuration = op_set_configuration,
++-- 
++1.9.3
++
+-- 
+1.9.3
+

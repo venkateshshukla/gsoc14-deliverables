@@ -1,0 +1,84 @@
+From d2178c347ed591ab02af0fafcf01897d60715974 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sat, 21 Jun 2014 17:04:08 +0530
+Subject: [PATCH 3/3] On android, use file descriptor instead of name
+
+For android, first extract the file descriptor of the attached usb device. Then
+use this file descriptor to open the divecomputer. Do this only on android. And
+pass the int file descriptor as const void *.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ libdivecomputer.c        | 25 +++++++++++++++++++++++++
+ libdivecomputer.h        |  3 +++
+ subsurface-configure.pri |  3 +--
+ 3 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/libdivecomputer.c b/libdivecomputer.c
+index 22df874..8b358ef 100644
+--- a/libdivecomputer.c
++++ b/libdivecomputer.c
+@@ -764,7 +764,32 @@ const char *do_libdivecomputer_import(device_data_t *data)
+ 	}
+ 
+ 	err = translate("gettextFromC", "Unable to open %s %s (%s)");
++#ifndef USE_USB_FD
+ 	rc = dc_device_open(&data->device, data->context, data->descriptor, data->devname);
++#else
++	int fd = get_usb_fd();
++	if (fd < 0) {
++		switch (fd) {
++		case -1:
++			err = translate("gettextFromC", "No USB device available.");
++			break;
++		case -2:
++			err = translate("gettextFromC", "No ftdi device found.");
++			break;
++		case -3:
++			err = translate("gettextFromC", "Not permitted to use USB device. Try reconnecting.");
++			break;
++		case -4:
++			err = translate("gettextFromC", "Error while opening USB device.");
++			break;
++		default:
++			err = translate("gettextFromC", "Unknown error while extracting file descriptor.");
++		}
++		return err;
++	}
++	rc = dc_device_open(&data->device, data->context, data->descriptor,(const void *) &fd);
++#endif // USE_USB_FD
++
+ 	if (rc == DC_STATUS_SUCCESS) {
+ 		err = do_device_import(data);
+ 		/* TODO: Show the logfile to the user on error. */
+diff --git a/libdivecomputer.h b/libdivecomputer.h
+index d9c5ac9..9f3a68b 100644
+--- a/libdivecomputer.h
++++ b/libdivecomputer.h
+@@ -30,6 +30,9 @@ typedef struct device_data_t
+ 	FILE *libdc_logfile;
+ } device_data_t;
+ 
++#ifdef __ANDROID__
++extern int get_usb_fd();
++#endif
+ const char *do_libdivecomputer_import(device_data_t *data);
+ const char *do_uemis_import(const char *mountpath, short force_download);
+ 
+diff --git a/subsurface-configure.pri b/subsurface-configure.pri
+index b147eba..96649bc 100644
+--- a/subsurface-configure.pri
++++ b/subsurface-configure.pri
+@@ -139,8 +139,7 @@ isEmpty(LIBGIT2DEVEL) {
+ link_pkgconfig: packagesExist(libiconv): PKGCONFIG += libiconv
+ 
+ # disable things when were on android
+-contains(QMAKE_PLATFORM, android): DEFINES += NO_MARBLE NO_USERMANUAL NO_PRINTING
+-
++contains(QMAKE_PLATFORM, android): DEFINES += NO_MARBLE NO_USERMANUAL NO_PRINTING USE_USB_FD
+ #
+ # Find libmarble
+ #
+-- 
+1.9.3
+

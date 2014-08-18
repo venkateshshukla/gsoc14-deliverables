@@ -1,0 +1,44 @@
+From 6e79bc8aa9e4d835af05b2a40802ab871d2fb5d8 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sun, 17 Aug 2014 22:17:49 +0530
+Subject: [PATCH 2/7] Pass void *devparam rather than char *name
+
+This would enable passing of both int file descriptor on android as well as path
+to tty on posix and win32.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ libdivecomputer.c | 2 +-
+ libdivecomputer.h | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/libdivecomputer.c b/libdivecomputer.c
+index 401fd8a..6a56136 100644
+--- a/libdivecomputer.c
++++ b/libdivecomputer.c
+@@ -777,7 +777,7 @@ const char *do_libdivecomputer_import(device_data_t *data)
+ 	}
+ 
+ 	err = translate("gettextFromC", "Unable to open %s %s (%s)");
+-	rc = dc_device_open(&data->device, data->context, data->descriptor, data->devname);
++	rc = dc_device_open(&data->device, data->context, data->descriptor, data->devparam);
+ 	if (rc == DC_STATUS_SUCCESS) {
+ 		err = do_device_import(data);
+ 		/* TODO: Show the logfile to the user on error. */
+diff --git a/libdivecomputer.h b/libdivecomputer.h
+index f277e29..2b1586c 100644
+--- a/libdivecomputer.h
++++ b/libdivecomputer.h
+@@ -18,7 +18,8 @@ extern "C" {
+ typedef struct device_data_t
+ {
+ 	dc_descriptor_t *descriptor;
+-	const char *vendor, *product, *devname;
++	const char *vendor, *product;
++	const void *devparam;
+ 	const char *model;
+ 	uint32_t deviceid, diveid;
+ 	dc_device_t *device;
+-- 
+1.9.3
+

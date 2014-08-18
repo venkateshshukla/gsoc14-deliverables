@@ -1,0 +1,47 @@
+From 542cea3daa65921a93cab6c67c96492686950963 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Mon, 18 Aug 2014 03:16:16 +0530
+Subject: [PATCH 6/7] gettext,c for android_jni
+
+For a beginning, translations are not incorporated on android. gettext.c
+implements trGettext for non Qt android_jni build.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ gettext.c      | 10 ++++++++++
+ subsurface.pro |  2 +-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+ create mode 100644 gettext.c
+
+diff --git a/gettext.c b/gettext.c
+new file mode 100644
+index 0000000..6f34d03
+--- /dev/null
++++ b/gettext.c
+@@ -0,0 +1,10 @@
++/* Get translations for android_jni */
++#include "gettext.h"
++
++// Unimplemented for now.
++const char *trGettext(const char *text)
++{
++	return text;
++}
++
++
+diff --git a/subsurface.pro b/subsurface.pro
+index 547d1bd..5d6f505 100644
+--- a/subsurface.pro
++++ b/subsurface.pro
+@@ -340,7 +340,7 @@ android_jni {
+ 	DEPENDPATH -= qt-ui
+ 
+ 	HEADERS += divecomputer_android.h getline.h
+-	SOURCES += divecomputer_android.c linux.c getline.c
++	SOURCES += divecomputer_android.c linux.c getline.c gettext.c
+ 
+ 	HEADERS -= \
+ 		save-html.h \
+-- 
+1.9.3
+

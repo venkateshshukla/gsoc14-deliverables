@@ -1,0 +1,137 @@
+From e17e9c04e5c005f92131bbfdd071b351451952f2 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Mon, 18 Aug 2014 01:05:36 +0530
+Subject: [PATCH 5/7] getline definition for android
+
+getline definition is not present in android bionic libraries. linux.c requires
+this definition. Hence, add the definitions for building android_jni.
+The getline file is taken from http://goo.gl/hm5ldd.
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ getline.c                | 51 ++++++++++++++++++++++++++++++++++++++++++++++++
+ getline.h                |  8 ++++++++
+ linux.c                  |  4 ++++
+ subsurface-configure.pri |  2 +-
+ subsurface.pro           |  4 ++--
+ 5 files changed, 66 insertions(+), 3 deletions(-)
+ create mode 100644 getline.c
+ create mode 100644 getline.h
+
+diff --git a/getline.c b/getline.c
+new file mode 100644
+index 0000000..08a19d6
+--- /dev/null
++++ b/getline.c
+@@ -0,0 +1,51 @@
++/*
++ * Copyright 2012, The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "getline.h"
++#include <stdio.h>
++#include <stdlib.h>
++
++ssize_t getline(char **lineptr, size_t *n, FILE *stream)
++{
++    char *ptr;
++
++    ptr = fgetln(stream, n);
++
++    if (ptr == NULL) {
++        return -1;
++    }
++
++    /* Free the original ptr */
++    if (*lineptr != NULL) free(*lineptr);
++
++    /* Add one more space for '\0' */
++    size_t len = n[0] + 1;
++
++    /* Update the length */
++    n[0] = len;
++
++    /* Allocate a new buffer */
++    *lineptr = malloc(len);
++
++    /* Copy over the string */
++    memcpy(*lineptr, ptr, len-1);
++
++    /* Write the NULL character */
++    (*lineptr)[len-1] = '\0';
++
++    /* Return the length of the new buffer */
++    return len;
++}
+diff --git a/getline.h b/getline.h
+new file mode 100644
+index 0000000..8bf22a3
+--- /dev/null
++++ b/getline.h
+@@ -0,0 +1,8 @@
++#ifndef GETLINE_H
++#define GETLINE_H
++
++#include <stdio.h>
++
++ssize_t getline(char **, size_t *, FILE *);
++
++#endif
+diff --git a/linux.c b/linux.c
+index dfa2401..1e53158 100644
+--- a/linux.c
++++ b/linux.c
+@@ -12,6 +12,10 @@
+ #include <unistd.h>
+ #include <pwd.h>
+ 
++#ifdef INCLUDE_GETLINE
++#include "getline.h"
++#endif
++
+ const char system_divelist_default_font[] = "Sans";
+ const int system_divelist_default_font_size = 8;
+ 
+diff --git a/subsurface-configure.pri b/subsurface-configure.pri
+index c590d46..1c0cfa7 100644
+--- a/subsurface-configure.pri
++++ b/subsurface-configure.pri
+@@ -141,7 +141,7 @@ link_pkgconfig: packagesExist(libiconv): PKGCONFIG += libiconv
+ # disable things when were on android
+ contains(QMAKE_PLATFORM, android): DEFINES += NO_MARBLE NO_USERMANUAL NO_PRINTING
+ android_jni {
+-	DEFINES += NO_PWGECOS
++	DEFINES += NO_PWGECOS INCLUDE_GETLINE
+ }
+ #
+ # Find libmarble
+diff --git a/subsurface.pro b/subsurface.pro
+index 4d33491..547d1bd 100644
+--- a/subsurface.pro
++++ b/subsurface.pro
+@@ -339,8 +339,8 @@ android_jni {
+ 	INCLUDEPATH -= qt-ui $$PWD
+ 	DEPENDPATH -= qt-ui
+ 
+-	HEADERS += divecomputer_android.h
+-	SOURCES += divecomputer_android.c linux.c
++	HEADERS += divecomputer_android.h getline.h
++	SOURCES += divecomputer_android.c linux.c getline.c
+ 
+ 	HEADERS -= \
+ 		save-html.h \
+-- 
+1.9.3
+

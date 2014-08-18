@@ -1,0 +1,53 @@
+From 31bfcdfd47a233eb1af26184dab3578ecb03cb14 Mon Sep 17 00:00:00 2001
+From: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+Date: Sun, 17 Aug 2014 22:18:56 +0530
+Subject: [PATCH 3/7] No pw_gecos on android
+
+replace with pw_name
+
+Signed-off-by: Venkatesh Shukla <venkatesh.shukla.eee11@iitbhu.ac.in>
+---
+ linux.c                  | 6 ++++++
+ subsurface-configure.pri | 4 +++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/linux.c b/linux.c
+index ed063b2..dfa2401 100644
+--- a/linux.c
++++ b/linux.c
+@@ -21,11 +21,17 @@ void subsurface_user_info(struct user_info *user)
+ 	const char *username = getenv("USER");
+ 
+ 	if (pwd) {
++#ifdef NO_PWGECOS
++		if (pwd->pw_name && *pwd->pw_name)
++			user->name = pwd->pw_name;
++#else
+ 		if (pwd->pw_gecos && *pwd->pw_gecos)
+ 			user->name = pwd->pw_gecos;
++#endif
+ 		if (!username)
+ 			username = pwd->pw_name;
+ 	}
++
+ 	if (username && *username) {
+ 		char hostname[64];
+ 		struct membuffer mb = { 0 };
+diff --git a/subsurface-configure.pri b/subsurface-configure.pri
+index b147eba..c590d46 100644
+--- a/subsurface-configure.pri
++++ b/subsurface-configure.pri
+@@ -140,7 +140,9 @@ link_pkgconfig: packagesExist(libiconv): PKGCONFIG += libiconv
+ 
+ # disable things when were on android
+ contains(QMAKE_PLATFORM, android): DEFINES += NO_MARBLE NO_USERMANUAL NO_PRINTING
+-
++android_jni {
++	DEFINES += NO_PWGECOS
++}
+ #
+ # Find libmarble
+ #
+-- 
+1.9.3
+
